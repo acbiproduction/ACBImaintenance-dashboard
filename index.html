@@ -1,536 +1,129 @@
-<!DOCTYPE html>
-<html lang="th">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dashboard ซ่อมบำรุง</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<style>
-  /* ── CONFIG ── แก้ค่านี้ก่อนใช้งาน */
-  :root {
-    --kintone-domain: "acbi.kintone.com";   /* domain ของคุณ */
-    --app-id: "141";                         /* App ID */
+(function () {
+  "use strict";
+
+  var DASHBOARD_URL = "https://acbiproduction.github.io/maintenance-dashboard/";
+  var TARGET_TAB    = "Maintenance Report";
+
+  /* ── Full Width ── */
+  function applyFullWidth() {
+    document.querySelectorAll('[style*="--gs-column-width"]').forEach(function(item) {
+      item.style.setProperty('--gs-column-width', '100%', 'important');
+      item.style.setProperty('width', '100%', 'important');
+      item.style.setProperty('flex', '1 1 100%', 'important');
+    });
   }
 
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-
-  body {
-    font-family: 'Noto Sans Thai', 'Segoe UI', sans-serif;
-    background: #f0f2f5;
-    color: #1a1a2e;
-    padding: 20px;
-    min-height: 100vh;
+  /* ── เช็คแท็บ active ── */
+  function getActiveTabName() {
+    var btn = document.querySelector('[class*="button-selected"]');
+    if (btn) return btn.textContent.trim();
+    var active = document.querySelector('[aria-selected="true"]');
+    if (active) return active.textContent.trim();
+    return "";
   }
 
-  /* ── HEADER ── */
-  .dash-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-bottom: 24px;
-  }
-  .dash-title {
-    font-size: 22px;
-    font-weight: 700;
-    color: #1a1a2e;
-    letter-spacing: -0.5px;
-  }
-  .dash-title span { color: #2C4B8B; }
-  .dash-subtitle { font-size: 13px; color: #888; margin-top: 2px; }
-  .btn-refresh {
-    padding: 8px 18px;
-    background: #2C4B8B;
-    color: white;
-    border: none;
-    border-radius: 8px;
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    transition: background 0.2s;
-  }
-  .btn-refresh:hover { background: #1a3a7a; }
-  .btn-refresh:disabled { opacity: 0.6; cursor: not-allowed; }
-
-  /* ── KPI CARDS ── */
-  .kpi-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
-    margin-bottom: 24px;
-  }
-  .kpi-card {
-    background: white;
-    border-radius: 12px;
-    padding: 20px;
-    border-left: 4px solid #ddd;
-    position: relative;
-    overflow: hidden;
-  }
-  .kpi-card.blue   { border-left-color: #2C4B8B; }
-  .kpi-card.green  { border-left-color: #27ae60; }
-  .kpi-card.orange { border-left-color: #e67e22; }
-  .kpi-card.red    { border-left-color: #e74c3c; }
-  .kpi-label { font-size: 12px; color: #888; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
-  .kpi-value { font-size: 32px; font-weight: 700; color: #1a1a2e; line-height: 1; }
-  .kpi-unit  { font-size: 13px; color: #aaa; margin-top: 6px; }
-  .kpi-icon  { position: absolute; right: 16px; top: 16px; font-size: 28px; opacity: 0.12; }
-
-  /* ── CHARTS ROW ── */
-  .charts-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 16px;
-    margin-bottom: 24px;
-  }
-  .chart-card {
-    background: white;
-    border-radius: 12px;
-    padding: 20px;
-  }
-  .chart-title {
-    font-size: 14px;
-    font-weight: 700;
-    color: #1a1a2e;
-    margin-bottom: 16px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid #f0f0f0;
-  }
-  .chart-wrap { position: relative; height: 220px; }
-
-  /* ── TABLE ── */
-  .table-card {
-    background: white;
-    border-radius: 12px;
-    padding: 20px;
-    margin-bottom: 16px;
-  }
-  .table-title {
-    font-size: 14px;
-    font-weight: 700;
-    color: #1a1a2e;
-    margin-bottom: 16px;
-    padding-bottom: 12px;
-    border-bottom: 1px solid #f0f0f0;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-  .badge-overdue {
-    background: #fdecea;
-    color: #c0392b;
-    font-size: 11px;
-    font-weight: 700;
-    padding: 3px 10px;
-    border-radius: 20px;
-  }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th {
-    background: #f8f9fb;
-    color: #555;
-    font-weight: 600;
-    padding: 10px 14px;
-    text-align: left;
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.3px;
-  }
-  td { padding: 11px 14px; border-bottom: 1px solid #f5f5f5; color: #333; }
-  tr:last-child td { border-bottom: none; }
-  tr:hover td { background: #fafbff; }
-
-  .status-badge {
-    display: inline-block;
-    padding: 3px 10px;
-    border-radius: 20px;
-    font-size: 11px;
-    font-weight: 600;
-  }
-  .s-pending  { background: #fff3cd; color: #856404; }
-  .s-progress { background: #d1ecf1; color: #0c5460; }
-  .s-done     { background: #d4edda; color: #155724; }
-  .s-overdue  { background: #fdecea; color: #c0392b; }
-
-  /* ── LOADING / ERROR ── */
-  .loading-overlay {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 40px;
-    color: #888;
-    font-size: 14px;
-    gap: 10px;
-  }
-  .spinner {
-    width: 20px; height: 20px;
-    border: 2px solid #ddd;
-    border-top-color: #2C4B8B;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .error-box {
-    background: #fdecea;
-    border: 1px solid #f5c6cb;
-    border-radius: 8px;
-    padding: 16px 20px;
-    color: #721c24;
-    font-size: 13px;
-    margin-bottom: 16px;
-  }
-  .last-update { font-size: 11px; color: #aaa; }
-</style>
-</head>
-<body>
-
-<!-- HEADER -->
-<div class="dash-header">
-  <div>
-    <div class="dash-title">📊 Dashboard <span>ซ่อมบำรุง</span></div>
-    <div class="dash-subtitle last-update" id="last-update">กำลังโหลดข้อมูล...</div>
-  </div>
-  <button class="btn-refresh" id="btn-refresh" onclick="loadAll()">
-    🔄 รีเฟรช
-  </button>
-</div>
-
-<div id="error-area"></div>
-
-<!-- KPI CARDS -->
-<div class="kpi-grid">
-  <div class="kpi-card blue">
-    <div class="kpi-icon">📋</div>
-    <div class="kpi-label">ใบซ่อมทั้งหมด</div>
-    <div class="kpi-value" id="kpi-total">—</div>
-    <div class="kpi-unit">รายการ</div>
-  </div>
-  <div class="kpi-card orange">
-    <div class="kpi-icon">⏳</div>
-    <div class="kpi-label">งานค้างอยู่</div>
-    <div class="kpi-value" id="kpi-pending">—</div>
-    <div class="kpi-unit">รายการ</div>
-  </div>
-  <div class="kpi-card red">
-    <div class="kpi-icon">🚨</div>
-    <div class="kpi-label">เกินกำหนด</div>
-    <div class="kpi-value" id="kpi-overdue">—</div>
-    <div class="kpi-unit">รายการ</div>
-  </div>
-  <div class="kpi-card green">
-    <div class="kpi-icon">⏱️</div>
-    <div class="kpi-label">เวลาซ่อมเฉลี่ย</div>
-    <div class="kpi-value" id="kpi-avgdays">—</div>
-    <div class="kpi-unit">วัน / งาน</div>
-  </div>
-</div>
-
-<!-- CHARTS -->
-<div class="charts-grid">
-  <div class="chart-card">
-    <div class="chart-title">สถานะงานซ่อม</div>
-    <div class="chart-wrap"><canvas id="chart-status"></canvas></div>
-  </div>
-  <div class="chart-card">
-    <div class="chart-title">เครื่องจักรที่เสียบ่อยที่สุด (Top 5)</div>
-    <div class="chart-wrap"><canvas id="chart-asset"></canvas></div>
-  </div>
-</div>
-
-<!-- OVERDUE TABLE -->
-<div class="table-card">
-  <div class="table-title">
-    งานค้างอยู่ / เกินกำหนด
-    <span class="badge-overdue" id="overdue-count">0 รายการ</span>
-  </div>
-  <div id="table-area">
-    <div class="loading-overlay"><div class="spinner"></div> กำลังโหลด...</div>
-  </div>
-</div>
-
-<script>
-/* ══════════════════════════════════════════
-   CONFIG — แก้ตรงนี้ให้ตรงกับ Kintone ของคุณ
-══════════════════════════════════════════ */
-const DOMAIN    = "acbi.kintone.com";
-const APP_ID    = 141;
-const API_TOKEN = "SdoT7pBdOdeqHhXjEi2X3tXflorxrxQBDNgbSdmc";
-
-/* Field Codes */
-const F = {
-  asset:       "ใบแจ้งซ่อม_ชื่อเครื่องจักร",
-  assetType:   "ใบแจ้งซ่อม_ประเภทเครื่องจักร",
-  area:        "ใบเอกสารแจ้งซ่อม_พื้นที่ในโรงงาน",
-  statusMC:    "Status_MC",                          // ← สถานะหลัก (นอกตาราง)
-  TABLE:       "ตาราง_ใบเอกสารแจ้งซ่อม",
-  dateStart:   "ใบเอกสารแจ้งซ่อม_วันที่เริ่ม",
-  dateEnd:     "ใบเอกสารแจ้งซ่อม_วันที่จบ",
-  actualDate:  "ใบเอกสารแจ้งซ่อม_วันที่ซ่อมจริง",
-  problem:     "ใบเอกสารแจ้งซ่อม_รายละเอียดปัญหา",
-  pic:         "ผู้ดำเนินการ_P_I_C",
-};
-
-/* ค่าสถานะจริงใน Status_MC */
-const STATUS_DONE    = ["ซ่อมเสร็จ", "ปิดงาน"];
-const STATUS_ACTIVE  = ["กำลังซ่อม"];
-const STATUS_PENDING = ["รอดำเนินการ", "ยังไม่เริ่ม", "ชำรุด"];
-
-let chartStatus = null;
-let chartAsset  = null;
-
-/* ══════════════════════════════════════════
-   FETCH จาก Kintone REST API
-══════════════════════════════════════════ */
-/* CORS Proxy ให้เรียกจาก GitHub Pages ได้ */
-const CORS_PROXY = "https://corsproxy.io/?url=";
-
-async function fetchRecords() {
-  let allRecords = [];
-  let offset = 0;
-  const limit = 500;
-
-  while (true) {
-    const apiUrl = `https://${DOMAIN}/k/v1/records.json?app=${APP_ID}&totalCount=true&query=limit%20${limit}%20offset%20${offset}`;
-    const proxiedUrl = CORS_PROXY + encodeURIComponent(apiUrl);
-
-    const res = await fetch(proxiedUrl, {
-      headers: {
-        "X-Cybozu-API-Token": API_TOKEN,
-        "Content-Type": "application/json",
+  /* ── หา container จริงๆ ── */
+  function getContainer() {
+    /* ลองทุก ID ที่เห็นใน DOM */
+    var ids = [
+      'cns-root',
+      'ncontents-content-ocean',
+      'ncontents-body-ocean',
+      'ncontents-ocean',
+      'nlayout-ocean',
+      'ncns-root',
+    ];
+    for (var i = 0; i < ids.length; i++) {
+      var el = document.getElementById(ids[i]);
+      if (el && el.offsetHeight > 100) {
+        console.log("[MC Dashboard] ใช้ container:", ids[i]);
+        return el;
+      }
+    }
+    /* fallback — หา div ที่ใหญ่ที่สุดในหน้า */
+    var biggest = null, maxH = 0;
+    document.querySelectorAll('div').forEach(function(el) {
+      if (el.offsetHeight > maxH && el.offsetHeight < window.innerHeight) {
+        maxH = el.offsetHeight;
+        biggest = el;
       }
     });
-    if (!res.ok) {
-      let msg = `HTTP ${res.status}`;
-      try { const err = await res.json(); msg = err.message || msg; } catch(e) {}
-      throw new Error(msg);
-    }
-    const data = await res.json();
-    allRecords = allRecords.concat(data.records);
-    if (allRecords.length >= parseInt(data.totalCount) || data.records.length < limit) break;
-    offset += limit;
-  }
-  return allRecords;
-}
-
-/* ══════════════════════════════════════════
-   วิเคราะห์ข้อมูล
-══════════════════════════════════════════ */
-function analyzeRecords(records) {
-  const today = new Date();
-  today.setHours(0,0,0,0);
-
-  let total       = records.length;
-  let pendingList = [];
-  let overdueList = [];
-  let statusCount = {};
-  let assetCount  = {};
-  let totalDays   = 0;
-  let dayCount    = 0;
-
-  records.forEach(rec => {
-    const asset    = rec[F.asset]?.value    || "ไม่ระบุ";
-    const statusMC = rec[F.statusMC]?.value || "ไม่ระบุ"; // ← ดึงจากนอกตาราง
-
-    assetCount[asset]      = (assetCount[asset]      || 0) + 1;
-    statusCount[statusMC]  = (statusCount[statusMC]  || 0) + 1;
-
-    /* ดึงวันที่และรายละเอียดจากแถวล่าสุดในตาราง */
-    const rows      = rec[F.TABLE]?.value || [];
-    const lastRow   = rows[rows.length - 1];
-    const rv        = lastRow?.value || {};
-    const dateS     = rv[F.dateStart]?.value;
-    const dateE     = rv[F.dateEnd]?.value;
-    const actual    = rv[F.actualDate]?.value;
-    const problem   = rv[F.problem]?.value || "-";
-    const pic       = rv[F.pic]?.value     || "-";
-
-    /* คำนวณเวลาซ่อมเฉลี่ย (วันเริ่ม → วันจบจริง) */
-    if (dateS && (dateE || actual)) {
-      const start = new Date(dateS);
-      const end   = new Date(actual || dateE);
-      const diff  = Math.max(0, Math.round((end - start) / 86400000));
-      totalDays += diff;
-      dayCount++;
-    }
-
-    /* ตรวจงานค้าง — ใช้ Status_MC เป็นเกณฑ์ */
-    const isDone = STATUS_DONE.some(s => statusMC === s);
-    if (!isDone) {
-      const isOverdue = dateE && new Date(dateE) < today;
-      const entry = {
-        asset,
-        status: statusMC,
-        dateStart: dateS || "-",
-        dateEnd:   dateE || "-",
-        pic,
-        problem: problem.substring(0, 50) + (problem.length > 50 ? "…" : ""),
-        overdue: isOverdue,
-      };
-      if (isOverdue) overdueList.push(entry);
-      else           pendingList.push(entry);
-    }
-  });
-
-  return {
-    total,
-    pending:  pendingList.length + overdueList.length,
-    overdue:  overdueList.length,
-    avgDays:  dayCount > 0 ? (totalDays / dayCount).toFixed(1) : "—",
-    statusCount,
-    assetCount,
-    overdueList: [...overdueList, ...pendingList].slice(0, 20),
-  };
-}
-
-/* ══════════════════════════════════════════
-   วาดกราฟ
-══════════════════════════════════════════ */
-function drawCharts(data) {
-  /* --- กราฟสถานะ — สีตรงกับความหมาย --- */
-  const STATUS_COLOR_MAP = {
-    "ซ่อมเสร็จ":     "#27ae60",
-    "ปิดงาน":        "#16a085",
-    "กำลังซ่อม":     "#2980b9",
-    "รอดำเนินการ":   "#f39c12",
-    "ยังไม่เริ่ม":   "#95a5a6",
-    "ชำรุด":         "#e74c3c",
-  };
-  const statusLabels = Object.keys(data.statusCount);
-  const statusValues = Object.values(data.statusCount);
-  const statusColors = statusLabels.map(l => STATUS_COLOR_MAP[l] || "#bdc3c7");
-
-  if (chartStatus) chartStatus.destroy();
-  chartStatus = new Chart(document.getElementById("chart-status"), {
-    type: "bar",
-    data: {
-      labels: statusLabels,
-      datasets: [{
-        data: statusValues,
-        backgroundColor: statusColors,
-        borderRadius: 6,
-        borderSkipped: false,
-      }]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: {
-        y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: "#f0f0f0" } },
-        x: { grid: { display: false }, ticks: { font: { size: 11 } } }
-      }
-    }
-  });
-
-  /* --- กราฟเครื่องจักรที่เสียบ่อย Top 5 --- */
-  const sorted = Object.entries(data.assetCount)
-    .sort((a,b) => b[1]-a[1]).slice(0,5);
-  const assetLabels = sorted.map(e => e[0].length > 14 ? e[0].substring(0,14)+"…" : e[0]);
-  const assetValues = sorted.map(e => e[1]);
-
-  if (chartAsset) chartAsset.destroy();
-  chartAsset = new Chart(document.getElementById("chart-asset"), {
-    type: "bar",
-    data: {
-      labels: assetLabels,
-      datasets: [{
-        data: assetValues,
-        backgroundColor: "#e74c3c",
-        borderRadius: 6,
-        borderSkipped: false,
-      }]
-    },
-    options: {
-      indexAxis: "y",
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: { legend: { display: false } },
-      scales: {
-        x: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: "#f0f0f0" } },
-        y: { grid: { display: false }, ticks: { font: { size: 11 } } }
-      }
-    }
-  });
-}
-
-/* ══════════════════════════════════════════
-   วาดตาราง
-══════════════════════════════════════════ */
-function drawTable(list) {
-  document.getElementById("overdue-count").textContent = `${list.length} รายการ`;
-
-  if (list.length === 0) {
-    document.getElementById("table-area").innerHTML =
-      `<div class="loading-overlay" style="color:#27ae60">✅ ไม่มีงานค้าง</div>`;
-    return;
+    if (biggest) console.log("[MC Dashboard] fallback container:", biggest.id, biggest.className.substring(0,40));
+    return biggest;
   }
 
-  const rows = list.map(r => {
-    const cls = r.overdue ? "s-overdue" : "s-pending";
-    const label = r.overdue ? "เกินกำหนด" : r.status || "ค้างอยู่";
-    return `<tr>
-      <td>${r.asset}</td>
-      <td>${r.problem}</td>
-      <td><span class="status-badge ${cls}">${label}</span></td>
-      <td>${r.dateStart}</td>
-      <td>${r.dateEnd}</td>
-      <td>${r.pic}</td>
-    </tr>`;
-  }).join("");
+  /* ── Inject iframe ── */
+  function injectDashboard() {
+    if (document.getElementById("mc-dashboard-iframe")) return;
 
-  document.getElementById("table-area").innerHTML = `
-    <table>
-      <thead><tr>
-        <th>เครื่องจักร</th>
-        <th>รายละเอียดปัญหา</th>
-        <th>สถานะ</th>
-        <th>วันที่เริ่ม</th>
-        <th>กำหนดจบ</th>
-        <th>ผู้ดำเนินการ</th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-    </table>`;
-}
+    var target = getContainer();
+    if (!target) {
+      console.warn("[MC Dashboard] ไม่เจอ container");
+      return;
+    }
 
-/* ══════════════════════════════════════════
-   MAIN LOAD
-══════════════════════════════════════════ */
-async function loadAll() {
-  const btn = document.getElementById("btn-refresh");
-  btn.disabled = true;
-  btn.textContent = "⏳ กำลังโหลด...";
-  document.getElementById("error-area").innerHTML = "";
+    var iframe = document.createElement("iframe");
+    iframe.id  = "mc-dashboard-iframe";
+    iframe.src = DASHBOARD_URL;
+    iframe.style.cssText = [
+      "width:100%",
+      "height:calc(100vh - 110px)",
+      "min-height:800px",
+      "border:none",
+      "display:block",
+      "background:#f0f2f5",
+    ].join(";");
 
-  try {
-    const records = await fetchRecords();
-    const data    = analyzeRecords(records);
-
-    /* KPI */
-    document.getElementById("kpi-total").textContent   = data.total;
-    document.getElementById("kpi-pending").textContent = data.pending;
-    document.getElementById("kpi-overdue").textContent = data.overdue;
-    document.getElementById("kpi-avgdays").textContent = data.avgDays;
-
-    drawCharts(data);
-    drawTable(data.overdueList);
-
-    const now = new Date().toLocaleString("th-TH");
-    document.getElementById("last-update").textContent = `อัปเดตล่าสุด: ${now}`;
-
-  } catch (err) {
-    document.getElementById("error-area").innerHTML =
-      `<div class="error-box">❌ โหลดข้อมูลไม่สำเร็จ: ${err.message}<br>
-       ตรวจสอบ API Token และ App ID ให้ถูกต้อง</div>`;
-    document.getElementById("last-update").textContent = "โหลดไม่สำเร็จ";
-  } finally {
-    btn.disabled = false;
-    btn.textContent = "🔄 รีเฟรช";
+    target.innerHTML = "";
+    target.style.setProperty('padding', '0', 'important');
+    target.appendChild(iframe);
+    console.log("[MC Dashboard] inject สำเร็จ!");
   }
-}
 
-/* โหลดตอนเปิดหน้า */
-loadAll();
-</script>
-</body>
-</html>
+  /* ── ลบ iframe ── */
+  function removeDashboard() {
+    var old = document.getElementById("mc-dashboard-iframe");
+    if (old) old.remove();
+  }
+
+  /* ── เช็คและ inject ── */
+  function checkAndInject() {
+    var tabName = getActiveTabName();
+    console.log("[MC Dashboard] active tab:", tabName);
+    if (tabName === TARGET_TAB) {
+      injectDashboard();
+    } else {
+      removeDashboard();
+    }
+  }
+
+  /* ── ดักคลิกแท็บ ── */
+  function bindTabClicks() {
+    var tabs = document.querySelectorAll('[class*="iwvXaf__item"], [class*="sc-kATncs"]');
+    tabs.forEach(function(tab) {
+      tab.addEventListener("click", function() {
+        setTimeout(checkAndInject, 500);
+      });
+    });
+  }
+
+  /* ── Start ── */
+  function init() {
+    applyFullWidth();
+    checkAndInject();
+    bindTabClicks();
+  }
+
+  if (document.readyState === "complete") {
+    setTimeout(init, 1000);
+  } else {
+    window.addEventListener("load", function() { setTimeout(init, 1000); });
+  }
+
+  if (typeof kintone !== "undefined" && kintone.events) {
+    kintone.events.on("portal.show", function() { setTimeout(init, 1000); });
+  }
+
+  setInterval(applyFullWidth, 1000);
+
+})();
